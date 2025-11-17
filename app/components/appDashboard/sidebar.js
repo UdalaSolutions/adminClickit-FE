@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { menuItems } from '@/app/utils/utils';
+import { menuItems } from '../../utils/utils';
 
 const Sidebar = () => {
 	const pathname = usePathname();
@@ -24,7 +24,9 @@ const Sidebar = () => {
 			<nav className='flex-1 p-4 px-6 space-y-2!'>
 				{menuItems.map((item) => {
 					const Icon = item.icon;
-					const isActive = pathname === item.path;
+
+					// Active if pathname starts with the item's path
+					const isActive = pathname.startsWith(item.path);
 
 					return (
 						<Link

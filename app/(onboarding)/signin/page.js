@@ -45,8 +45,7 @@ const Signin = () => {
 
 	const handleForgotPassword = () => {
 		// Navigate to forgot password page
-		alert('Redirecting to forgot password page...');
-		// window.location.href = '/forgot-password';
+		window.location.href = '/forgot-password';
 	};
 
 	const isFormValid =

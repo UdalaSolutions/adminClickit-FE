@@ -9,7 +9,7 @@ import {
 	ChevronLeft,
 	ChevronRight,
 } from 'lucide-react';
-import { users } from '@/app/utils/utils';
+import { users } from '../../utils/util';
 
 const Users = () => {
 	const [selectedPlan, setSelectedPlan] = useState('All Plans');

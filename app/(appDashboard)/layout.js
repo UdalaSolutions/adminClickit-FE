@@ -1,5 +1,5 @@
-import Header from '../components/(appDashboard)/header';
-import Sidebar from '../components/(appDashboard)/sidebar';
+import Header from '../components/appDashboard/header';
+import Sidebar from '../components/appDashboard/sidebar';
 
 export default function Layout({ children }) {
 	return (

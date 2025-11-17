@@ -1,8 +1,8 @@
-import Overview from '@/app/components/(appDashboard)/dashboard/overview';
-import SubscriptionGrowth from '@/app/components/(appDashboard)/dashboard/subscriptionGrowth';
-import EntryByChannel from '@/app/components/(appDashboard)/dashboard/entriesByChannel';
-import RecentWinners from '@/app/components/(appDashboard)/dashboard/recentWinner';
-import TotalEntries from '@/app/components/(appDashboard)/dashboard/totalEntries';
+import Overview from '../../components/appDashboard/dashboard/overview';
+import SubscriptionGrowth from '../../components/appDashboard/dashboard/subscriptionGrowth';
+import EntryByChannel from '../../components/appDashboard/dashboard/entriesByChannel';
+import RecentWinners from '../../components/appDashboard/dashboard/recentWinner';
+import TotalEntries from '../../components/appDashboard/dashboard/totalEntries';
 
 const Dashboard = () => {
 	return (

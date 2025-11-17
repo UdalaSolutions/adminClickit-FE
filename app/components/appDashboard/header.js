@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { Bell, ChevronDown } from 'lucide-react';
-import NotificationModal from '@/app/components/(appDashboard)/NotificationModal';
-import { notifications } from '@/app/utils/utils';
+import NotificationModal from '../../components/appDashboard/NotificationModal';
+import { notifications } from '../../utils/utils';
 
 const Header = () => {
 	const [showNotifications, setShowNotifications] = useState(false);
@@ -15,8 +15,10 @@ const Header = () => {
 
 	// Get page title from pathname
 	const getPageTitle = () => {
-		const path = pathname.split('/').pop() || 'dashboard';
-		return path
+		const segments = pathname.split('/').filter(Boolean);
+		const main = segments[0] || 'dashboard';
+
+		return main
 			.split('-')
 			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 			.join(' ');

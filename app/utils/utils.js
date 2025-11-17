@@ -6,6 +6,10 @@ import {
 	Settings,
 	FileSearch,
 	Gamepad,
+	UserRound,
+	Bell,
+	UsersRound,
+	ShieldPlus,
 } from 'lucide-react';
 
 export const menuItems = [
@@ -13,11 +17,40 @@ export const menuItems = [
 	{ icon: UserRoundPlus, label: 'Users', path: '/users' },
 	{ icon: Trophy, label: 'Winners', path: '/winners' },
 	{ icon: Gamepad, label: 'Draw management', path: '/draw-management' },
-	{ icon: MessageCircleMore, label: 'Messaging center', path: '/messaging' },
-	{ icon: FileSearch, label: 'Audit & Compliance', path: '/audit' },
-	{ icon: Settings, label: 'Settings', path: '/settings' },
+	{
+		icon: MessageCircleMore,
+		label: 'Messaging center',
+		path: '/messaging-center',
+	},
+	{ icon: Settings, label: 'Settings', path: '/settings/profile' },
 ];
 
+export const settingsModules = [
+	{
+		id: 'profile',
+		label: 'Profile',
+		icon: UserRound,
+		href: '/settings/profile',
+	},
+	{
+		id: 'notifications',
+		label: 'Notifications',
+		icon: Bell,
+		href: '/settings/notifications',
+	},
+	{
+		id: 'sub-admin',
+		label: 'Sub-admin access',
+		icon: UsersRound,
+		href: '/settings/sub-admin',
+	},
+	{
+		id: 'security',
+		label: 'Security center',
+		icon: ShieldPlus,
+		href: '/settings/security',
+	},
+];
 export const notifications = [
 	{
 		type: 'success',

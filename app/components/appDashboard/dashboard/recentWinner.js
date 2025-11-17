@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { getStatusStyles } from '@/app/utils/utilsFunctions';
+import { getStatusStyles } from '../../../utils/utilsFunctions';
 
 const RecentWinners = () => {
 	const [winners] = useState([
