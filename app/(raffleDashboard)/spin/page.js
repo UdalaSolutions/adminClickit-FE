@@ -155,11 +155,12 @@ const ALL_NUMBERS = [
 	'+234 814 778 4486',
 	'+234 815 334 7753',
 	'+234 816 992 2220',
+	'+234 816 992 2220',
 ];
 
 const WHEEL_SEGMENT_COUNT = 12;
 const DISPLAY_COUNT = 20;
-const TOTAL_ENTRIES = 150;
+const TOTAL_ENTRIES = 151;
 
 function maskNumber(num) {
 	if (!num) return '';
