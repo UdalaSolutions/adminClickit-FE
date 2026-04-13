@@ -9,7 +9,7 @@ import {
 	ChevronLeft,
 	ChevronRight,
 } from 'lucide-react';
-import { winners } from '@/app/utils/utils';
+import { winners } from '../../utils/utils';
 
 const Winners = () => {
 	const [selectedPlan, setSelectedPlan] = useState('All Plans');
@@ -86,9 +86,9 @@ const Winners = () => {
 								<td className='px-10 py-4'>
 									<span
 										className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-											winner.status === 'Paid'
-												? 'bg-[#049A040F] text-[#049A04]'
-												: 'bg-[#F20D0D0F] text-[#F20D0D]'
+											winner.status === 'Paid' ?
+												'bg-[#049A040F] text-[#049A04]'
+											:	'bg-[#F20D0D0F] text-[#F20D0D]'
 										}`}>
 										{winner.status}
 									</span>
