@@ -9,6 +9,9 @@ import dayjs from 'dayjs';
 import { api, getList } from '../../utils/api';
 import TableSkeleton from '../../components/common/TableSkeleton';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import DrawDetailsModal, {
+	StatusPill,
+} from '../../components/appDashboard/draws/DrawDetailsModal';
 
 
 const formatDate = (val) => {
@@ -34,6 +37,8 @@ const mapDraw = (d) => ({
 	executedTime: formatDate(d.executedDateAndTime),
 	status: titleCase(d.status),
 	entries: (d.participants || d.usersParticipatedIds || []).length,
+	rawStatus: d.status,
+	raw: d, // full backend object for the details panel
 });
 
 const titleCase = (v) =>
@@ -117,8 +122,26 @@ const DrawManagement = () => {
 		}
 	};
 
+	const [detailsDraw, setDetailsDraw] = useState(null);
+
+	// A draw can only be executed once subscribers have entered it
+	const runDraw = (draw) => {
+		if (!draw.entries) {
+			return toast.error('This draw has no participants yet, so it cannot be run.');
+		}
+		router.push(`/spin?drawId=${draw.id}`);
+	};
+
 	const rowMenu = (draw) => ({
 		items: [
+			{
+				key: 'details',
+				label: (
+					<span className='text-sm'>
+						{draw.rawStatus === 'COMPLETED' ? 'View winner & participants' : 'View participants'}
+					</span>
+				),
+			},
 			...(draw.status !== 'Completed'
 				? [
 						{
@@ -132,15 +155,11 @@ const DrawManagement = () => {
 				label: <span className='text-sm'>Delete draw</span>,
 			},
 		],
-		onClick: ({ key }) => {
+		onClick: ({ key, domEvent }) => {
+			domEvent?.stopPropagation();
+			if (key === 'details') return setDetailsDraw(draw);
 			if (key === 'delete') return setDrawToDelete(draw);
-			// A draw can only be executed once subscribers have entered it
-			if (!draw.entries) {
-				return toast.error(
-					'This draw has no participants yet, so it cannot be run.',
-				);
-			}
-			router.push(`/spin?drawId=${draw.id}`);
+			runDraw(draw);
 		},
 	});
 
@@ -200,7 +219,8 @@ const DrawManagement = () => {
 							draws.map((draw) => (
 								<tr
 									key={draw.id}
-									className='border-b border-gray-100 hover:bg-gray-50 transition-colors'>
+									onClick={() => setDetailsDraw(draw)}
+									className='border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer'>
 									<td className='px-6 py-4 text-foreground'>{draw.id}</td>
 									<td className='px-6 py-4 '>{draw.drawType}</td>
 									<td className='px-6 py-4 text-foreground'>
@@ -210,8 +230,12 @@ const DrawManagement = () => {
 										{draw.executedTime}
 									</td>
 									<td className='px-6 py-4 text-foreground'>{draw.entries}</td>
-									<td className='px-6 py-4 text-foreground'>{draw.status}</td>
-									<td className='px-6 py-4'>
+									<td className='px-6 py-4 text-foreground'>
+										<StatusPill status={draw.rawStatus} />
+									</td>
+									<td
+										className='px-6 py-4'
+										onClick={(e) => e.stopPropagation()}>
 										<Dropdown
 											menu={rowMenu(draw)}
 											trigger={['click']}
@@ -251,6 +275,17 @@ const DrawManagement = () => {
 					/>
 				</button>
 			</div>
+
+			<DrawDetailsModal
+				open={!!detailsDraw}
+				draw={detailsDraw?.raw}
+				onClose={() => setDetailsDraw(null)}
+				onRun={() => {
+					const d = detailsDraw;
+					setDetailsDraw(null);
+					runDraw(d);
+				}}
+			/>
 
 			<ConfirmModal
 				open={!!drawToDelete}

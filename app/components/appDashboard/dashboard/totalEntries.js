@@ -1,25 +1,23 @@
 'use client';
 
-import { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
-const TotalEntries = () => {
-	// Set hasData to false to see empty state with 0
-	const [hasData] = useState(true);
+const DRAW_COLORS = { Daily: '#FFC857', Weekly: '#FAAA32', Monthly: '#0B132A' };
 
-	// Sample data
+// Backend: { total, dailyDraw, weeklyDraw, monthlyDraw, breakdown: [...] }
+const TotalEntries = ({ totals, loading }) => {
 	const drawData = [
-		{ name: 'Weekly draw', value: 4, color: '#FAAA32' },
-		{ name: 'Monthly draw', value: 2, color: '#0B132A' },
+		{ name: 'Daily draw', value: totals?.dailyDraw || 0, color: DRAW_COLORS.Daily },
+		{ name: 'Weekly draw', value: totals?.weeklyDraw || 0, color: DRAW_COLORS.Weekly },
+		{ name: 'Monthly draw', value: totals?.monthlyDraw || 0, color: DRAW_COLORS.Monthly },
 	];
-
-	const emptyData = [
-		{ name: 'Weekly draw', value: 0, color: '#FAAA32' },
-		{ name: 'Monthly draw', value: 0, color: '#0B132A' },
-	];
-
-	const chartData = hasData ? drawData : emptyData;
-	const totalDraws = chartData.reduce((acc, item) => acc + item.value, 0);
+	const totalDraws =
+		totals?.total ?? drawData.reduce((acc, item) => acc + item.value, 0);
+	const hasData = totalDraws > 0;
+	// A grey ring when there is nothing to chart
+	const chartData = hasData
+		? drawData.filter((d) => d.value > 0)
+		: [{ name: 'None', value: 1, color: '#F0F0F0' }];
 
 	return (
 		<div className='bg-white p-4 rounded-xl w-full xl:w-[350px] xl:shrink-0'>
@@ -55,14 +53,14 @@ const TotalEntries = () => {
 					{/* Center Text */}
 					<div className='absolute inset-0 flex items-center justify-center'>
 						<span className='text-[27px] leading-[41px]  font-semibold '>
-							{totalDraws}
+							{loading ? '–' : totalDraws}
 						</span>
 					</div>
 				</div>
 
 				{/* Legend */}
 				<div className='mt-2 space-y-3 w-full'>
-					{chartData.map((item, index) => (
+					{drawData.map((item, index) => (
 						<div
 							key={index}
 							className='flex items-center justify-between'>

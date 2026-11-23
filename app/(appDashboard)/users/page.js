@@ -1,17 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-	Search,
-	ListFilter,
-	Download,
-	MoreVertical,
-	ChevronLeft,
-	ChevronRight,
-} from 'lucide-react';
+import { MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getList } from '../../utils/api';
 import { withPlus } from '../../utils/format';
 import TableSkeleton from '../../components/common/TableSkeleton';
+import TableToolbar from '../../components/common/TableToolbar';
+import { exportCsv } from '../../utils/exportCsv';
+
+const PLAN_OPTIONS = [
+	{ value: 'All Plans', label: 'All plans' },
+	{ value: 'Daily', label: 'Daily' },
+	{ value: 'Weekly', label: 'Weekly' },
+	{ value: 'Monthly', label: 'Monthly' },
+];
 
 const formatDate = (val) => {
 	if (!val) return '-';
@@ -29,6 +31,7 @@ const mapUser = (u) => ({
 	date: formatDate(u.dateThatTheSubscriptionIsValid),
 	channel: u.registrationChannel || '-',
 	autoRenew: u.autoRenew === true,
+	autoRenewText: u.autoRenew === true ? 'On' : 'Off',
 	phone: withPlus(u.number || u.phoneNumber),
 	plan:
 		u.subscriptionType
@@ -56,57 +59,45 @@ const Users = () => {
 			.finally(() => setLoading(false));
 	}, []);
 
-	const filtered =
-		selectedPlan === 'All Plans'
-			? users
-			: users.filter(
-					(u) => u.plan.toLowerCase() === selectedPlan.toLowerCase(),
-				);
+	const [search, setSearch] = useState('');
+	const q = search.trim().toLowerCase();
+	const filtered = users.filter(
+		(row) =>
+			(selectedPlan === 'All Plans' ||
+				row.plan.toLowerCase() === selectedPlan.toLowerCase()) &&
+			(!q ||
+				[row.phone, row.plan, row.channel, row.status, row.date].some((v) =>
+					String(v || '').toLowerCase().includes(q),
+				)),
+	);
+
+	const handleExport = () =>
+		exportCsv(
+			`subscribers-${new Date().toISOString().slice(0, 10)}.csv`,
+			[
+				{ key: 'date', label: 'Valid until' },
+				{ key: 'phone', label: 'Phone number' },
+				{ key: 'plan', label: 'Subscription plan' },
+				{ key: 'channel', label: 'Channel' },
+				{ key: 'autoRenewText', label: 'Auto-renew' },
+				{ key: 'status', label: 'Status' },
+			],
+			filtered,
+		);
 
 	return (
 		<div className=''>
 			{/* Toolbar */}
-			<div className='mb-6'>
-				<div className='flex flex-col md:flex-row md:items-center justify-between gap-3'>
-					<div className='flex flex-col sm:flex-row sm:items-center gap-3 flex-1'>
-						<div className='relative flex-1 md:max-w-md'>
-							<Search
-								className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400'
-								size={20}
-							/>
-							<input
-								type='text'
-								placeholder='Search for user by phone number, subscription status, etc...'
-								className='w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-							/>
-						</div>
-
-						<div className='flex items-center gap-2 px-4 pr-0 border border-gray-300 rounded-lg '>
-							<select
-								value={selectedPlan}
-								onChange={(e) => setSelectedPlan(e.target.value)}
-								className='px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-transparent flex-1'>
-								<option>All Plans</option>
-								<option>Daily</option>
-								<option>Weekly</option>
-								<option>Monthly</option>
-							</select>
-
-							<button className='p-2 rounded-lg hover:bg-gray-100 transition-colors bg-white'>
-								<ListFilter
-									size={20}
-									className='text-gray-600'
-								/>
-							</button>
-						</div>
-					</div>
-
-					<button className='flex items-center gap-2 px-4 py-2 bg-[#FFF7EB]  text-[#FAAA32] rounded-xl transition-colors md:ml-4 self-start md:self-auto shrink-0'>
-						<Download size={20} />
-						<span className='font-bold'>Export file</span>
-					</button>
-				</div>
-			</div>
+			<TableToolbar
+				search={search}
+				onSearch={setSearch}
+				searchPlaceholder='Search by phone number, plan, channel or status'
+				filterValue={selectedPlan}
+				onFilter={setSelectedPlan}
+				filterOptions={PLAN_OPTIONS}
+				onExport={handleExport}
+				exportDisabled={filtered.length === 0}
+			/>
 
 			{/* Table */}
 			<div className='bg-white rounded-lg overflow-x-auto'>

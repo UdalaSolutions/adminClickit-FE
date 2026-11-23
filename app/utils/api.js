@@ -124,6 +124,26 @@ function rememberName(email, { firstName, lastName }) {
 	} catch {}
 }
 
+// Signed-in admin's backend id (cached on the user after the first lookup)
+export async function getMyUserId() {
+	const user = getCurrentUser();
+	if (!user?.email) return null;
+	if (user.id) return user.id;
+	const users = await getList('/api/user/get-all', 'users');
+	const me = users.find((u) => u.email?.toLowerCase() === user.email.toLowerCase());
+	if (me) updateCurrentUser({ id: me.id, role: me.userRole || user.role });
+	return me?.id || null;
+}
+
+// GET /api/dashboard?period=DAILY|WEEKLY|MONTHLY&userId=
+export async function getDashboard(period = 'WEEKLY') {
+	const userId = await getMyUserId().catch(() => null);
+	const qs = new URLSearchParams({ period });
+	if (userId) qs.set('userId', userId);
+	const json = await api.get(`/api/dashboard?${qs}`);
+	return json.data || {};
+}
+
 // Merge changes into the signed-in user and tell the header to re-render
 export function updateCurrentUser(changes) {
 	if (typeof window === 'undefined') return null;

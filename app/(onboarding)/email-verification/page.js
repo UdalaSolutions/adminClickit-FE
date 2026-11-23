@@ -113,8 +113,8 @@ const EmailVerification = () => {
 	const isCodeComplete = code.every((digit) => digit !== '');
 
 	return (
-		<div className='flex items-center justify-center p-4'>
-			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-6 sm:p-8 w-full max-w-[500px]'>
+		<div className='w-full flex items-center justify-center p-4'>
+			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-6 sm:p-10 w-full max-w-[540px]'>
 				<button
 					onClick={handleBack}
 					className='bg-[#FAFAFA] rounded-xl flex items-center gap-2 text-foreground mb-6 transition-colors h-12.5 w-12.5 justify-center cursor-pointer'>

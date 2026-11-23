@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Bell, Info, X } from 'lucide-react';
-import { notifications as notificationsData } from '@/app/utils/utils';
+import { notifications as notificationsData } from '../../utils/utils';
 
 const NotificationPage = () => {
 	const [activeTab, setActiveTab] = useState('all');

@@ -1,162 +1,227 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-	Search,
-	ListFilter,
-	Download,
-	MoreVertical,
-	ChevronLeft,
-	ChevronRight,
-} from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
+import { Dropdown } from 'antd';
 import { getList } from '../../utils/api';
 import { withPlus } from '../../utils/format';
 import TableSkeleton from '../../components/common/TableSkeleton';
+import TableToolbar from '../../components/common/TableToolbar';
+import Pagination from '../../components/common/Pagination';
+import DrawDetailsModal from '../../components/appDashboard/draws/DrawDetailsModal';
+import { exportCsv } from '../../utils/exportCsv';
 
-const formatDate = (val) => {
+const PAGE_SIZE = 10;
+
+const PLAN_OPTIONS = [
+	{ value: 'All Plans', label: 'All plans' },
+	{ value: 'Daily', label: 'Daily' },
+	{ value: 'Weekly', label: 'Weekly' },
+	{ value: 'Monthly', label: 'Monthly' },
+];
+
+const titleCase = (v) => (v ? v.charAt(0) + v.slice(1).toLowerCase() : '-');
+
+const formatDate = (val, withTime = false) => {
 	if (!val) return '-';
 	const d = new Date(val);
-	return isNaN(d.getTime())
-		? '-'
-		: d.toLocaleDateString('en-GB', {
-				day: '2-digit',
-				month: '2-digit',
-				year: '2-digit',
-			});
+	if (isNaN(d.getTime())) return '-';
+	return d.toLocaleString('en-GB', {
+		day: '2-digit',
+		month: 'short',
+		year: 'numeric',
+		...(withTime && { hour: '2-digit', minute: '2-digit' }),
+	});
 };
 
-const mapWinner = (w) => ({
-	date: formatDate(w.createdAt || w.drawDate),
-	drawType:
-		w.drawType
-			? w.drawType.charAt(0) + w.drawType.slice(1).toLowerCase()
-			: '-',
-	winner:
-		withPlus(
-			w.winnerPhoneNumber || w.winnerNumber || w.number || w.phoneNumber,
-		),
-	prize: w.prize || w.prizeAmount || '-',
-	status: w.paymentStatus || w.status || '-',
-});
+// Same instant, ignoring sub-second precision differences
+const sameMoment = (a, b) =>
+	a && b && Math.abs(new Date(a).getTime() - new Date(b).getTime()) < 1000;
+
+// GET /api/user/winner/get-all has one record per phone number, with every
+// win in datesWon. Draw type, prize and payment status live on the draw, so
+// each win is matched to the completed draw executed at that moment.
+const buildRows = (winners, draws) =>
+	winners
+		.flatMap((w) => {
+			const dates = w.datesWon?.length ? w.datesWon : [w.dateBlock];
+			return dates.map((wonAt) => {
+				const draw = draws.find(
+					(d) =>
+						d.winnerPhoneNumber === w.phoneNumber &&
+						sameMoment(d.executedDateAndTime, wonAt),
+				);
+				const blocked = w.dateUnblock && new Date(w.dateUnblock) > new Date();
+				return {
+					key: `${w.phoneNumber}-${wonAt}`,
+					wonAt,
+					date: formatDate(wonAt, true),
+					drawType: titleCase(draw?.drawType),
+					winner: withPlus(w.phoneNumber),
+					prize:
+						typeof draw?.prizeAmount === 'number'
+							? `₦${draw.prizeAmount.toLocaleString()}`
+							: '-',
+					status: draw?.paymentStatus ? titleCase(draw.paymentStatus) : 'Pending',
+					eligibleFrom: formatDate(w.dateUnblock),
+					blocked,
+					totalWins: w.datesWon?.length || 1,
+					draw,
+				};
+			});
+		})
+		.sort((a, b) => new Date(b.wonAt) - new Date(a.wonAt));
 
 const Winners = () => {
-	const [winners, setWinners] = useState([]);
+	const [rows, setRows] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [selectedPlan, setSelectedPlan] = useState('All Plans');
+	const [search, setSearch] = useState('');
+	const [page, setPage] = useState(1);
+	const [detailsDraw, setDetailsDraw] = useState(null);
 
 	useEffect(() => {
-		getList('/api/user/winner/get-all', 'winners')
-			.then((list) => {
-				setWinners(list.map(mapWinner));
-			})
+		Promise.all([
+			getList('/api/user/winner/get-all', 'winners'),
+			// Draws only add detail; winners still show if this fails
+			getList('/api/user/draw/get-all', 'draws').catch(() => []),
+		])
+			.then(([winners, draws]) => setRows(buildRows(winners, draws)))
 			.catch(() => {})
 			.finally(() => setLoading(false));
 	}, []);
 
-	const filtered =
-		selectedPlan === 'All Plans'
-			? winners
-			: winners.filter(
-					(w) => w.drawType.toLowerCase() === selectedPlan.toLowerCase(),
-				);
+	const q = search.trim().toLowerCase();
+	const filtered = rows.filter(
+		(row) =>
+			(selectedPlan === 'All Plans' ||
+				row.drawType.toLowerCase() === selectedPlan.toLowerCase()) &&
+			(!q ||
+				[row.winner, row.drawType, row.prize, row.status, row.date].some((v) =>
+					String(v || '').toLowerCase().includes(q),
+				)),
+	);
+
+	// Back to page 1 when the filters change
+	useEffect(() => {
+		setPage(1);
+	}, [search, selectedPlan]);
+	const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+	const handleExport = () =>
+		exportCsv(
+			`winners-${new Date().toISOString().slice(0, 10)}.csv`,
+			[
+				{ key: 'date', label: 'Date won' },
+				{ key: 'drawType', label: 'Draw type' },
+				{ key: 'winner', label: 'Winner' },
+				{ key: 'prize', label: 'Prize' },
+				{ key: 'status', label: 'Payment status' },
+				{ key: 'eligibleFrom', label: 'Can win again from' },
+			],
+			filtered,
+		);
 
 	return (
 		<div className=''>
-			{/* Toolbar */}
-			<div className='mb-6'>
-				<div className='flex flex-col md:flex-row md:items-center justify-between gap-3'>
-					<div className='flex flex-col sm:flex-row sm:items-center gap-3 flex-1'>
-						<div className='relative flex-1 md:max-w-md'>
-							<Search
-								className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400'
-								size={20}
-							/>
-							<input
-								type='text'
-								placeholder='Search for user by phone number, subscription status, etc...'
-								className='w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-							/>
-						</div>
+			<TableToolbar
+				search={search}
+				onSearch={setSearch}
+				searchPlaceholder='Search by phone number, draw type, prize or status'
+				filterValue={selectedPlan}
+				onFilter={setSelectedPlan}
+				filterOptions={PLAN_OPTIONS}
+				onExport={handleExport}
+				exportDisabled={filtered.length === 0}
+			/>
 
-						<div className='flex items-center gap-2 px-4 pr-0 border border-gray-300 rounded-lg '>
-							<select
-								value={selectedPlan}
-								onChange={(e) => setSelectedPlan(e.target.value)}
-								className='px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-transparent flex-1'>
-								<option>All Plans</option>
-								<option>Daily</option>
-								<option>Weekly</option>
-								<option>Monthly</option>
-							</select>
-
-							<button className='p-2 rounded-lg hover:bg-gray-100 transition-colors bg-white'>
-								<ListFilter
-									size={20}
-									className='text-gray-600'
-								/>
-							</button>
-						</div>
-					</div>
-
-					<button className='flex items-center gap-2 px-4 py-2 bg-[#FFF7EB]  text-[#FAAA32] rounded-xl transition-colors md:ml-4 self-start md:self-auto shrink-0'>
-						<Download size={20} />
-						<span className='font-bold'>Export file</span>
-					</button>
-				</div>
-			</div>
-
-			{/* Table */}
 			<div className='bg-white rounded-lg overflow-x-auto'>
-				<table className='w-full min-w-[760px]'>
+				<table className='w-full min-w-[860px]'>
 					<thead>
-						<tr className=' bg-[#fffbf5]'>
-							<th className='text-left px-10 p-6  font-semibold '>Date</th>
-							<th className='text-left px-10 py-4  font-medium '>Draw type</th>
-							<th className='text-left px-10 py-4 font-medium '>Winners</th>
-							<th className='text-left px-10 py-4  font-medium '>Prize</th>
-							<th className='text-left px-10 py-4  font-medium '>
-								Payment Status
-							</th>
-							<th className='px-10 py-4'></th>
+						<tr className='bg-[#fffbf5]'>
+							<th className='text-left px-6 py-4 font-semibold'>Date won</th>
+							<th className='text-left px-6 py-4 font-semibold'>Draw type</th>
+							<th className='text-left px-6 py-4 font-semibold'>Winner</th>
+							<th className='text-left px-6 py-4 font-semibold'>Prize</th>
+							<th className='text-left px-6 py-4 font-semibold'>Payment status</th>
+							<th className='text-left px-6 py-4 font-semibold'>Can win again</th>
+							<th className='px-6 py-4'></th>
 						</tr>
 					</thead>
 					<tbody>
 						{loading ? (
-							<TableSkeleton rows={6} cols={6} cellClass='px-10 py-5' />
+							<TableSkeleton
+								rows={6}
+								cols={7}
+							/>
 						) : filtered.length === 0 ? (
 							<tr>
 								<td
-									colSpan={6}
-									className='px-10 py-8 text-center text-gray-400'>
+									colSpan={7}
+									className='px-6 py-8 text-center text-gray-400'>
 									No winners found
 								</td>
 							</tr>
 						) : (
-							filtered.map((winner, index) => (
+							pageRows.map((row) => (
 								<tr
-									key={index}
-									className='border-b border-[#E6E6E6] hover:bg-gray-50 transition-colors'>
-									<td className='px-10 py-4'>{winner.date}</td>
-									<td className='px-10 py-4  font-medium'>{winner.drawType}</td>
-									<td className='px-10 py-4'>{winner.winner}</td>
-									<td className='px-10 py-4'>{winner.prize}</td>
-									<td className='px-10 py-4'>
-										<span
-											className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-												winner.status === 'Paid' || winner.status === 'PAID'
-													? 'bg-[#049A040F] text-[#049A04]'
-													: 'bg-[#F20D0D0F] text-[#F20D0D]'
-											}`}>
-											{winner.status}
+									key={row.key}
+									onClick={() => row.draw && setDetailsDraw(row.draw)}
+									className={`border-b border-[#E6E6E6] hover:bg-gray-50 transition-colors ${
+										row.draw ? 'cursor-pointer' : ''
+									}`}>
+									<td className='px-6 py-4'>{row.date}</td>
+									<td className='px-6 py-4 font-medium'>{row.drawType}</td>
+									<td className='px-6 py-4'>
+										<span className='inline-flex items-center gap-2'>
+											{row.winner}
+											{row.totalWins > 1 && (
+												<span className='rounded-full bg-[#FFF7EB] px-2 py-0.5 text-xs font-medium text-[#FAAA32]'>
+													{row.totalWins} wins
+												</span>
+											)}
 										</span>
 									</td>
+									<td className='px-6 py-4'>{row.prize}</td>
 									<td className='px-6 py-4'>
-										<button className='p-1 hover:bg-gray-100 rounded transition-colors'>
-											<MoreVertical
-												size={20}
-												className='text-gray-400'
-											/>
-										</button>
+										<span
+											className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+												row.status === 'Paid'
+													? 'bg-[#049A040F] text-[#049A04]'
+													: 'bg-[#FFF7EB] text-[#FAAA32]'
+											}`}>
+											{row.status}
+										</span>
+									</td>
+									<td className='px-6 py-4 text-[#666666]'>
+										{row.blocked ? row.eligibleFrom : 'Now'}
+									</td>
+									<td
+										className='px-6 py-4'
+										onClick={(e) => e.stopPropagation()}>
+										{row.draw && (
+											<Dropdown
+												trigger={['click']}
+												placement='bottomRight'
+												menu={{
+													items: [
+														{
+															key: 'draw',
+															label: <span className='text-sm'>View draw</span>,
+														},
+													],
+													onClick: () => setDetailsDraw(row.draw),
+												}}>
+												<button
+													className='p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer'
+													aria-label='Winner actions'>
+													<MoreVertical
+														size={20}
+														className='text-gray-400'
+													/>
+												</button>
+											</Dropdown>
+										)}
 									</td>
 								</tr>
 							))
@@ -165,22 +230,19 @@ const Winners = () => {
 				</table>
 			</div>
 
-			{/* Pagination */}
-			<div className='flex items-center justify-end gap-2 mt-6'>
-				<ChevronLeft
-					className='text-[#ecc78e]'
-					sizes={24}
-				/>
+			<Pagination
+				page={page}
+				pageSize={PAGE_SIZE}
+				total={filtered.length}
+				onPageChange={setPage}
+				className='mt-6'
+			/>
 
-				<button className='px-4 py-2 border border-[#faaa32] rounded-full font-medium'>
-					1
-				</button>
-
-				<ChevronRight
-					className='text-[#ecc78e]'
-					sizes={24}
-				/>
-			</div>
+			<DrawDetailsModal
+				open={!!detailsDraw}
+				draw={detailsDraw}
+				onClose={() => setDetailsDraw(null)}
+			/>
 		</div>
 	);
 };

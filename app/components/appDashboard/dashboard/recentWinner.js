@@ -1,35 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
 import { getStatusStyles } from '../../../utils/utilsFunctions';
+import { withPlus } from '../../../utils/format';
+import TableSkeleton from '../../common/TableSkeleton';
 
-const RecentWinners = () => {
-	const [winners] = useState([
-		{
-			date: '01/10/25',
-			drawType: 'Weekly',
-			winners: '+234 806 1325 269',
-			prize: '₦50,000',
-			paymentStatus: 'Paid',
-			statusColor: 'green',
-		},
-		{
-			date: '01/10/25',
-			drawType: 'Weekly',
-			winners: '+234 806 1325 269',
-			prize: '₦50,000',
-			paymentStatus: 'Pending',
-			statusColor: 'red',
-		},
-		{
-			date: '01/10/25',
-			drawType: 'Weekly',
-			winners: '+234 806 1325 269',
-			prize: '₦50,000',
-			paymentStatus: 'In progress',
-			statusColor: 'orange',
-		},
-	]);
+const STATUS_COLOR = { paid: 'green', pending: 'red', 'in progress': 'orange' };
+
+// Backend: [{ drawId, date, drawType, winner, prize, paymentStatus }]
+const toRows = (list = []) =>
+	list.map((w) => ({
+		id: w.drawId,
+		date: w.date || '-',
+		drawType: w.drawType || '-',
+		winners: withPlus(w.winner),
+		prize: w.prize || '-',
+		paymentStatus: w.paymentStatus || '-',
+		statusColor: STATUS_COLOR[(w.paymentStatus || '').toLowerCase()],
+	}));
+
+const RecentWinners = ({ winners: list, loading }) => {
+	const winners = toRows(list);
 
 	// Optional: handle empty state display
 	const EmptyState = () => (
@@ -69,14 +60,22 @@ const RecentWinners = () => {
 			<div className='p-4 flex justify-between items-center'>
 				<h2 className='font-bold'>Recent winners</h2>
 				{winners.length > 0 && (
-					<button className='text-sm font-semibold text-[#FAAA32] transition-colors'>
+					<Link
+						href='/winners'
+						className='text-sm font-semibold text-[#FAAA32] transition-colors'>
 						See all
-					</button>
+					</Link>
 				)}
 			</div>
 
-			{winners.length === 0 ? (
-				<h1>Hello </h1>
+			{loading ? (
+				<table className='w-full min-w-[760px]'>
+					<tbody>
+						<TableSkeleton rows={3} cols={5} />
+					</tbody>
+				</table>
+			) : winners.length === 0 ? (
+				<EmptyState />
 			) : (
 				<div className='overflow-x-auto'>
 					<table className='w-full min-w-[760px]'>
@@ -102,7 +101,7 @@ const RecentWinners = () => {
 						<tbody>
 							{winners.map((winner, index) => (
 								<tr
-									key={index}
+									key={winner.id || index}
 									className='border-b border-gray-50 hover:bg-gray-50 transition-colors'>
 									<td className='py-4 px-6 text-sm'>{winner.date}</td>
 									<td className='py-4 px-6 text-sm'>{winner.drawType}</td>

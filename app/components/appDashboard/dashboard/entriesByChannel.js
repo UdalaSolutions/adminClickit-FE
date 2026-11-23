@@ -12,14 +12,33 @@ import {
 	Cell,
 } from 'recharts';
 
-const EntryByChannel = () => {
-	const [hasData, setHasData] = useState(true); // Toggle for demo
+const CHANNEL_COLORS = { SMS: '#8979FF', Website: '#FF928A', USSD: '#3CC3DF' };
 
-	// Sample data for different channels
-	const channelData = [
-		{ name: 'SMS', value: 70, color: '#8979FF' },
-		{ name: 'Website', value: 30, color: '#FF928A' },
-	];
+// Backend: { sms, website, ussd, total, channels: [{ channel, count, percentage }] }
+const toChannelData = (entries) => {
+	const list = entries?.channels?.length
+		? entries.channels
+		: entries
+			? [
+					{ channel: 'SMS', count: entries.sms || 0 },
+					{ channel: 'Website', count: entries.website || 0 },
+				]
+			: [];
+	// Show USSD too once it has entries
+	if (entries?.ussd > 0 && !list.some((c) => c.channel === 'USSD')) {
+		list.push({ channel: 'USSD', count: entries.ussd });
+	}
+	return list.map((c) => ({
+		name: c.channel,
+		value: c.count || 0,
+		percentage: c.percentage,
+		color: CHANNEL_COLORS[c.channel] || '#FAAA32',
+	}));
+};
+
+const EntryByChannel = ({ entries, loading }) => {
+	const channelData = toChannelData(entries);
+	const hasData = channelData.some((c) => c.value > 0);
 
 	const EmptyState = () => (
 		<div className='h-80 flex items-center justify-center bg-gray-50 rounded-lg'>
@@ -86,7 +105,13 @@ const EntryByChannel = () => {
 			return (
 				<div className='bg-white px-4 py-2 rounded-lg shadow-lg border border-gray-200'>
 					<p className='text-sm font-semibold '>{payload[0].payload.name}</p>
-					<p className='text-sm text-gray-600'>{payload[0].value} entries</p>
+					<p className='text-sm text-gray-600'>
+						{payload[0].value.toLocaleString()}{' '}
+						{payload[0].value === 1 ? 'entry' : 'entries'}
+						{typeof payload[0].payload.percentage === 'number'
+							? ` · ${payload[0].payload.percentage}%`
+							: ''}
+					</p>
 				</div>
 			);
 		}
@@ -100,8 +125,10 @@ const EntryByChannel = () => {
 			</div>
 
 
-			{!hasData ? (
-				<h1>Hello world</h1>
+			{loading ? (
+				<div className='h-[352px] rounded-lg bg-[#F7F7F7] animate-pulse' />
+			) : !hasData ? (
+				<EmptyState />
 			) : (
 				<>
 					<ResponsiveContainer
@@ -123,10 +150,10 @@ const EntryByChannel = () => {
 								tick={{ fill: '#6b7280', fontSize: 12 }}
 								axisLine={{ stroke: '#e5e7eb' }}
 								tickLine={false}
-								domain={[0, 100]}
+								allowDecimals={false}
 							/>
 							<Tooltip
-								// content={<CustomTooltip />}
+								content={<CustomTooltip />}
 								cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
 							/>
 							<Bar
