@@ -1,21 +1,59 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useState } from 'react';
-import { Upload, User } from 'lucide-react';
-import Image from 'next/image';
+import { useState, useEffect } from 'react';
+import { User } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { uploadImageToCloudinary } from '../../../utils/cloudinaryUpload';
+import { getCurrentUser, updateCurrentUser, getList } from '../../../utils/api';
 
 const ProfileSettings = () => {
 	const [formData, setFormData] = useState({
-		firstName: 'John',
-		lastName: 'Brown',
-		email: 'johnbrown02@gmail.com',
+		firstName: '',
+		lastName: '',
+		email: '',
 		profileImage: null,
 	});
+	const [role, setRole] = useState('');
+	const [loading, setLoading] = useState(true);
+	const [saving, setSaving] = useState(false);
 	const [imagePreview, setImagePreview] = useState(null);
 	const [uploading, setUploading] = useState(false);
+
+	// Pre-fill from the signed-in user, then confirm email/role with the backend
+	useEffect(() => {
+		const user = getCurrentUser() || {};
+		setFormData({
+			firstName: user.firstName || '',
+			lastName: user.lastName || '',
+			email: user.email || '',
+			profileImage: user.profileImage || null,
+		});
+		setRole(user.role || '');
+
+		if (!user.email) {
+			setLoading(false);
+			return;
+		}
+		// GET /api/user/get-all -> { id, email, userRole, dateTimeJoined }
+		getList('/api/user/get-all', 'users')
+			.then((users) => {
+				const me = users.find(
+					(u) => u.email?.toLowerCase() === user.email.toLowerCase(),
+				);
+				if (!me) return;
+				setRole(me.userRole || user.role || '');
+				// Use backend names if it ever starts returning them
+				setFormData((prev) => ({
+					...prev,
+					firstName: prev.firstName || me.firstName || '',
+					lastName: prev.lastName || me.lastName || '',
+				}));
+				updateCurrentUser({ id: me.id, role: me.userRole || user.role });
+			})
+			.catch(() => {})
+			.finally(() => setLoading(false));
+	}, []);
 
 	const handleChange = (e) => {
 		const { name, value } = e.target;
@@ -53,6 +91,7 @@ const ProfileSettings = () => {
 			}));
 
 			setImagePreview(secureUrl);
+			updateCurrentUser({ profileImage: secureUrl });
 
 			toast.success('Image uploaded successfully!');
 		} catch (error) {
@@ -65,13 +104,38 @@ const ProfileSettings = () => {
 
 	const handleSubmit = (e) => {
 		e.preventDefault();
-
+		const firstName = formData.firstName.trim();
+		const lastName = formData.lastName.trim();
+		if (!firstName || !lastName) {
+			toast.error('Please enter your first and last name');
+			return;
+		}
+		setSaving(true);
 		try {
+			// Saved on this device only. The backend has no profile endpoint, and
+			// PUT /api/user/edit needs the password field (risk of blanking it).
+			updateCurrentUser({
+				firstName,
+				lastName,
+				profileImage: formData.profileImage,
+			});
 			toast.success('Profile updated successfully!');
-		} catch (error) {
+		} catch {
 			toast.error('Failed to update profile. Please try again.');
+		} finally {
+			setSaving(false);
 		}
 	};
+
+	const inputClass =
+		'border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:border-[#FAAA32] focus:ring-1 focus:ring-[#FAAA32]';
+	const roleLabel = role
+		? role
+				.toLowerCase()
+				.split('_')
+				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+				.join(' ')
+		: '';
 
 	return (
 		<div>
@@ -122,7 +186,7 @@ const ProfileSettings = () => {
 					</div>
 
 					{/* Name Fields */}
-					<div className='grid grid-cols-2 gap-6'>
+					<div className='grid grid-cols-1 sm:grid-cols-2 gap-6'>
 						<div className='flex flex-col gap-2'>
 							<label
 								htmlFor='firstName'
@@ -135,8 +199,8 @@ const ProfileSettings = () => {
 								type='text'
 								value={formData.firstName}
 								onChange={handleChange}
-								className='border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:border-[#FAAA32] focus:ring-1 focus:ring-[#FAAA32]'
-								placeholder='John'
+								className={inputClass}
+								placeholder={loading ? 'Loading...' : 'Enter your first name'}
 								required
 							/>
 						</div>
@@ -153,8 +217,8 @@ const ProfileSettings = () => {
 								type='text'
 								value={formData.lastName}
 								onChange={handleChange}
-								className='border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:border-[#FAAA32] focus:ring-1 focus:ring-[#FAAA32]'
-								placeholder='Brown'
+								className={inputClass}
+								placeholder={loading ? 'Loading...' : 'Enter your last name'}
 								required
 							/>
 						</div>
@@ -172,19 +236,23 @@ const ProfileSettings = () => {
 							name='email'
 							type='email'
 							value={formData.email}
-							onChange={handleChange}
-							className='border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:border-[#FAAA32] focus:ring-1 focus:ring-[#FAAA32]'
-							placeholder='johnbrown02@gmail.com'
-							required
+							readOnly
+							className='border border-gray-200 rounded-lg px-4 py-2.5 outline-none bg-[#FAFAFA] text-[#666666] cursor-not-allowed'
+							placeholder={loading ? 'Loading...' : ''}
 						/>
+						<span className='text-xs text-[#999999]'>
+							This is the email you sign in with
+							{roleLabel ? ` · ${roleLabel}` : ''}
+						</span>
 					</div>
 
 					{/* Submit Button */}
 					<div className='flex justify-end pt-4'>
 						<button
 							onClick={handleSubmit}
-							className='px-8 py-3 bg-[#FAAA32] text-[#111111] rounded-xl font-semibold transition-colors cursor-pointer'>
-							Save Changes
+							disabled={saving || loading}
+							className='px-8 py-3 bg-[#FAAA32] text-[#111111] rounded-xl font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'>
+							{saving ? 'Saving...' : 'Save Changes'}
 						</button>
 					</div>
 				</div>

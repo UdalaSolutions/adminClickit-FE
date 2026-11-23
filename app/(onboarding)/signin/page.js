@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { login } from '../../utils/api';
 
 const Signin = () => {
 	const [formData, setFormData] = useState({
@@ -18,29 +19,20 @@ const Signin = () => {
 			...formData,
 			[e.target.name]: e.target.value,
 		});
-		// Clear error when user starts typing
 		if (error) setError('');
 	};
 
 	const handleSubmit = async () => {
 		setIsLoading(true);
 		setError('');
-
-		// Simulate API call
-		setTimeout(() => {
-			const correctEmail = 'johnbrown2@gmail.com';
-			const correctPassword = 'John@3we';
-
-			if (
-				formData.email === correctEmail &&
-				formData.password === correctPassword
-			) {
-				window.location.href = '/dashboard';
-			} else {
-				setError('Invalid Credentials');
-			}
+		try {
+			await login(formData.email.trim(), formData.password);
+			window.location.href = '/dashboard';
+		} catch (err) {
+			setError(err.message || 'Invalid credentials');
+		} finally {
 			setIsLoading(false);
-		}, 1000);
+		}
 	};
 
 	const handleForgotPassword = () => {
@@ -53,7 +45,7 @@ const Signin = () => {
 
 	return (
 		<div className='flex items-center justify-center p-4'>
-			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-8 w-[500px] '>
+			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-6 sm:p-8 w-full max-w-[500px] '>
 				<h1 className='text-[32px] font-bold  mb-2 text-center'>
 					Welcome Admin
 				</h1>
@@ -124,6 +116,15 @@ const Signin = () => {
 						}`}>
 						{isLoading ? 'Logging in...' : 'Log in'}
 					</button>
+
+					<p className='text-center text-[#999999] mt-4'>
+						Don&apos;t have an account?{' '}
+						<a
+							href='/signup'
+							className='text-[#FAAA32] font-semibold hover:underline'>
+							Sign up
+						</a>
+					</p>
 				</div>
 			</div>
 		</div>

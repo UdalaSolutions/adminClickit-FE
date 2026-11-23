@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, EyeOff, Check, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Check, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { api } from '../../utils/api';
 
 const ConfirmPassword = () => {
 	const router = useRouter();
@@ -16,6 +17,8 @@ const ConfirmPassword = () => {
 
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
 
 	// Password validation checks
 	const hasMinLength = formData.password.length >= 8;
@@ -41,11 +44,30 @@ const ConfirmPassword = () => {
 			...formData,
 			[e.target.name]: e.target.value,
 		});
+		if (error) setError('');
 	};
 
-	const handleSubmit = () => {
-		if (isFormValid) {
-			router.push('/email-verification');
+	const handleSubmit = async () => {
+		if (!isFormValid) return;
+		setIsLoading(true);
+		setError('');
+		try {
+			const email =
+				typeof window !== 'undefined'
+					? sessionStorage.getItem('pendingEmail') || formData.email
+					: formData.email;
+			await api.post('/api/user/reset-password', {
+				email,
+				newPassword: formData.password,
+			});
+			if (typeof window !== 'undefined') {
+				sessionStorage.removeItem('pendingEmail');
+			}
+			window.location.href = '/signin';
+		} catch (err) {
+			setError(err.message || 'Failed to reset password. Please try again.');
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
@@ -56,7 +78,7 @@ const ConfirmPassword = () => {
 
 	return (
 		<div className='min-h-screen  flex items-center justify-center p-6'>
-			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-8 min-w-[500px]'>
+			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-6 sm:p-8 w-full max-w-[500px]'>
 				<button
 					onClick={handleBack}
 					className='bg-[#FAFAFA] rounded-xl flex items-center gap-2 text-foreground mb-6 transition-colors h-12.5 w-12.5 justify-center cursor-pointer'>
@@ -115,7 +137,7 @@ const ConfirmPassword = () => {
 						</div>
 					</div>
 
-					<div className='grid grid-cols-2 gap-x-8 gap-y-2 text-sm pt-2'>
+					<div className='grid grid-cols-1 min-[400px]:grid-cols-2 gap-x-8 gap-y-2 text-sm pt-2'>
 						<div className='flex items-center gap-2'>
 							<div
 								className={`w-5 h-5 rounded-full flex items-center justify-center ${
@@ -179,15 +201,22 @@ const ConfirmPassword = () => {
 						</div>
 					</div>
 
+					{error && (
+						<div className='flex items-center gap-2 text-[#F20D0D]'>
+							<AlertCircle size={16} />
+							<span className='text-sm'>{error}</span>
+						</div>
+					)}
+
 					<button
 						onClick={handleSubmit}
-						disabled={!isFormValid}
+						disabled={!isFormValid || isLoading}
 						className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors mt-12 cursor-pointer ${
-							isFormValid
+							isFormValid && !isLoading
 								? 'bg-[#FAAA32]'
 								: 'bg-[#FAAA32]/50 text-foreground/50 cursor-not-allowed'
 						}`}>
-						Reset Password
+						{isLoading ? 'Resetting...' : 'Reset Password'}
 					</button>
 				</div>
 			</div>

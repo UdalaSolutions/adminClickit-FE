@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import { Menu } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { api } from '../../utils/api';
+import { spacedPhone } from '../../utils/format';
 
 import {
 	ALL_NUMBERS,
@@ -16,9 +20,38 @@ import WinModal from '../../components/spin/WinModal';
 import NumberTicker from '../../components/spin/NumberTicker';
 import LoadingScreen from '../../components/spin/LoadingScreen';
 
+// Repeat a list until it has at least `n` items (the wheel needs 12+ segments)
+const fillTo = (list, n) => {
+	if (!list.length) return [];
+	const out = [];
+	while (out.length < n) out.push(...list);
+	return out;
+};
+
+// The backend may return the draw as `data` or as `data.draw`
+const unwrapDraw = (json) => json?.data?.draw || json?.data || null;
+
+const pickWinnerPhone = (json) => {
+	const d = json?.data;
+	if (typeof d === 'string' && /^\+?\d{10,}$/.test(d.trim())) return d.trim();
+	return (
+		d?.winnerPhoneNumber || d?.draw?.winnerPhoneNumber || d?.phoneNumber || null
+	);
+};
+
 export default function SpinPage() {
 	const containerRef = useRef(null);
 	const wheelRef = useRef(null);
+
+	// Real draw (from ?drawId=) — falls back to demo numbers when absent
+	const drawIdRef = useRef(null);
+	const poolRef = useRef(ALL_NUMBERS);
+	const backendWinnerRef = useRef(null);
+	const [totalEntries, setTotalEntries] = useState(ALL_NUMBERS.length);
+	const [drawInfo, setDrawInfo] = useState(null);
+	const [drawError, setDrawError] = useState('');
+	const [isExecuting, setIsExecuting] = useState(false);
+	const [executed, setExecuted] = useState(false); // real draw already run this visit
 
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSpinning, setIsSpinning] = useState(false);
@@ -47,17 +80,62 @@ export default function SpinPage() {
 
 	// Mount wheel
 	useEffect(() => {
+		// React dev mode runs effects twice; this stops a second wheel being drawn
+		let cancelled = false;
 		const minDelay = new Promise((r) => setTimeout(r, 5000));
 
-		Promise.all([import('spin-wheel'), minDelay])
+		const drawId = new URLSearchParams(window.location.search).get('drawId');
+		drawIdRef.current = drawId;
+
+		// Draw can't run -> go straight back to Draw management with the reason
+		const BAIL = Symbol('bail');
+		const bail = (msg) => {
+			if (!cancelled) {
+				try {
+					sessionStorage.setItem('drawError', msg);
+				} catch {}
+				window.location.replace('/draw-management');
+			}
+			throw BAIL;
+		};
+
+		// GET /api/user/draw/get/{drawId} -> participants become the wheel numbers
+		const loadDraw = drawId
+			? api
+					.get(`/api/user/draw/get/${drawId}`)
+					.catch((err) => bail(err.message || 'Could not load this draw.'))
+					.then((json) => {
+						const draw = unwrapDraw(json);
+						const entries = (draw?.participants || [])
+							.map((p) => p.phoneNumber)
+							.filter(Boolean)
+							.map(spacedPhone);
+						if (draw?.status === 'COMPLETED') {
+							bail('This draw has already been executed.');
+						}
+						if (!entries.length) {
+							bail('This draw has no participants yet, so it cannot be run.');
+						}
+						setDrawInfo(draw);
+						setTotalEntries(entries.length);
+						const unique = [...new Set(entries)];
+						poolRef.current = fillTo(unique, DISPLAY_COUNT);
+						setDisplayNums(poolRef.current.slice(0, DISPLAY_COUNT));
+					})
+			: Promise.resolve();
+
+		Promise.all([import('spin-wheel'), minDelay, loadDraw])
 			.then(([{ Wheel }]) => {
+				if (cancelled) return;
 				if (!containerRef.current) {
 					setIsLoading(false);
 					return;
 				}
 
 				const wheel = new Wheel(containerRef.current, {
-					items: buildPrizes(ALL_NUMBERS),
+					items: buildPrizes(
+						poolRef.current.length ? poolRef.current : ALL_NUMBERS,
+					),
 					itemLabelFont: 'Inter, serif',
 					itemLabelFontSizeMax: 15,
 					itemLabelRadius: 0.82,
@@ -87,9 +165,13 @@ export default function SpinPage() {
 				setWheelReady(true);
 				setIsLoading(false);
 			})
-			.catch(() => setIsLoading(false));
+			.catch((e) => {
+				// On BAIL the page is already redirecting — keep the loader up
+				if (e !== BAIL && !cancelled) setIsLoading(false);
+			});
 
 		return () => {
+			cancelled = true;
 			if (wheelRef.current) {
 				wheelRef.current.remove();
 				wheelRef.current = null;
@@ -109,8 +191,8 @@ export default function SpinPage() {
 
 			intervalRef.current = setInterval(() => {
 				const slotIdx = slotRef.current % DISPLAY_COUNT;
-				const rnd = Math.floor(Math.random() * ALL_NUMBERS.length);
-				const newNum = ALL_NUMBERS[rnd];
+				const pool = poolRef.current.length ? poolRef.current : ALL_NUMBERS;
+				const newNum = pool[Math.floor(Math.random() * pool.length)];
 
 				setDisplayNums((prev) => {
 					const next = [...prev];
@@ -132,18 +214,17 @@ export default function SpinPage() {
 
 			if (hasSpun && winnerIndex !== null) {
 				setDisplayNums((prev) => {
-					const winningNum = prev[winnerIndex] ?? ALL_NUMBERS[winnerIndex];
+					// Real draws: the backend picked the winner — show it under the pointer
+					const winningNum =
+						backendWinnerRef.current ??
+						prev[winnerIndex] ??
+						ALL_NUMBERS[winnerIndex];
 					winnerNumRef.current = winningNum;
 
-					const base = ALL_NUMBERS.filter((n) => n !== winningNum)
-						.sort(() => Math.random() - 0.5)
-						.slice(0, DISPLAY_COUNT - 1);
-					const insertAt = Math.floor(Math.random() * DISPLAY_COUNT);
-					return [
-						...base.slice(0, insertAt),
-						winningNum,
-						...base.slice(insertAt),
-					];
+					const next = [...prev];
+					next[winnerIndex] = winningNum;
+					if (wheelRef.current) wheelRef.current.items = buildPrizes(next);
+					return next;
 				});
 
 				setTimeout(() => {
@@ -164,8 +245,36 @@ export default function SpinPage() {
 		};
 	}, [isSpinning, hasSpun, winnerIndex]);
 
-	const handleSpin = useCallback(() => {
-		if (isSpinning || !wheelRef.current || !wheelReady) return;
+	const handleSpin = useCallback(async () => {
+		if (isSpinning || isExecuting || executed || !wheelRef.current || !wheelReady) return;
+		if (drawError) return toast.error(drawError);
+
+		const drawId = drawIdRef.current;
+		if (drawId) {
+			// POST /api/user/draw/execute/{drawId} — backend chooses the winner
+			setIsExecuting(true);
+			try {
+				const res = await api.post(`/api/user/draw/execute/${drawId}`);
+				let phone = pickWinnerPhone(res);
+				if (!phone) {
+					const fresh = await api.get(`/api/user/draw/get/${drawId}`);
+					phone = unwrapDraw(fresh)?.winnerPhoneNumber || null;
+				}
+				if (!phone) {
+					toast.error('Draw executed, but the backend did not return a winner.');
+					return;
+				}
+				backendWinnerRef.current = spacedPhone(phone);
+				setExecuted(true);
+			} catch (err) {
+				// e.g. "Cannot execute draw: There are no participants."
+				toast.error(err.message || 'Failed to execute draw');
+				return;
+			} finally {
+				setIsExecuting(false);
+			}
+		}
+
 		const idx = Math.floor(Math.random() * WHEEL_SEGMENT_COUNT);
 		setIsSpinning(true);
 		setShowModal(false);
@@ -173,9 +282,14 @@ export default function SpinPage() {
 		setWinnerIndex(null);
 		setHasSpun(false);
 		wheelRef.current.spinToItem(idx, 7000, true, 3, 1);
-	}, [isSpinning, wheelReady]);
+	}, [isSpinning, isExecuting, executed, wheelReady, drawError]);
 
 	const handleNewDraw = () => {
+		// A real draw can only run once — go back to manage draws
+		if (drawIdRef.current) {
+			window.location.href = '/draw-management';
+			return;
+		}
 		setShowModal(false);
 		setWinner(null);
 		setWinnerIndex(null);
@@ -207,6 +321,10 @@ export default function SpinPage() {
 					winner={winner}
 					onClose={() => setShowModal(false)}
 					onRetry={handleNewDraw}
+					onViewWinners={() => (window.location.href = '/winners')}
+					isRealDraw={!!drawIdRef.current}
+					drawType={drawInfo?.drawType}
+					totalEntries={totalEntries}
 				/>
 			)}
 
@@ -218,10 +336,32 @@ export default function SpinPage() {
 						width={163}
 						height={50}
 					/>
-					<button className='bg-[#FAAA321A] flex items-center gap-2 text-[#FAAA32] font-semibold rounded-[50px] py-3 px-6'>
-						Menu <Menu size={20} />
-					</button>
+					<Link
+						href='/draw-management'
+						className='bg-[#FAAA321A] flex items-center gap-2 text-[#FAAA32] font-semibold rounded-[50px] py-3 px-6'>
+						<ArrowLeft size={20} /> Draws
+					</Link>
 				</header>
+
+				{drawInfo && (
+					<p className='text-center text-sm text-[#999999] -mt-2'>
+						{drawInfo.drawType
+							? drawInfo.drawType.charAt(0) +
+								drawInfo.drawType.slice(1).toLowerCase()
+							: ''}{' '}
+						draw
+					</p>
+				)}
+				{drawError && !isLoading && !showModal && (
+					<div className='mx-auto mt-3 px-4 py-2 rounded-lg bg-[#F20D0D0F] text-[#F20D0D] text-sm text-center max-w-md'>
+						{drawError}{' '}
+						<Link
+							href='/draw-management'
+							className='underline font-medium'>
+							Back to draws
+						</Link>
+					</div>
+				)}
 
 				<main className='flex-1 flex flex-col items-center justify-end relative overflow-visible'>
 					<div className='flex items-end justify-center gap-16 w-full px-4 relative z-10 mb-[-160px] sm:mb-[-275px] lg:mb-[-325px]'>
@@ -330,14 +470,16 @@ export default function SpinPage() {
 						onClick={handleSpin}
 						disabled={isSpinning || !wheelReady}
 						className='w-full bg-[#0B132A] text-white font-semibold py-4 rounded-full transition cursor-pointer shadow-[0px_4px_0px_0px_#0B132A] max-w-[280px]'>
-						Total Entries: {ALL_NUMBERS.length.toLocaleString()}
+						Total Entries: {totalEntries.toLocaleString()}
 					</button>
 					<button
 						onClick={handleSpin}
-						disabled={isSpinning || !wheelReady}
+						disabled={isSpinning || isExecuting || executed || !wheelReady || !!drawError}
 						className={`w-full bg-[#FAAA32] text-black font-semibold py-4 rounded-full transition cursor-pointer shadow-[0px_4px_0px_0px_#0B132A] max-w-[280px]
-							${isSpinning || !wheelReady ? 'opacity-60 cursor-not-allowed' : 'opacity-100 cursor-pointer hover:scale-105'}`}>
-						{isSpinning ?
+							${isSpinning || isExecuting || executed || !wheelReady || drawError ? 'opacity-60 cursor-not-allowed' : 'opacity-100 cursor-pointer hover:scale-105'}`}>
+						{isExecuting ?
+							'Picking winner...'
+						: isSpinning ?
 							<span
 								style={{
 									display: 'inline-flex',

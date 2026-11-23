@@ -1,33 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
-import { message } from 'antd';
+import { toast } from 'react-toastify';
 import CreateSubAdminModal from '../../../components/modal/CreateSubAdminModal';
 import SubAdminCard from '../../../components/appDashboard/settings/SubAdminCard';
 import EmptyState from '../../../components/appDashboard/settings/EmptyState';
+import { api, getList } from '../../../utils/api';
+import ConfirmModal from '../../../components/common/ConfirmModal';
+
+const mapAdmin = (u) => ({
+	id: u.id,
+	name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || '-',
+	role: u.userRole || u.role || 'Admin',
+	email: u.email,
+	lastLogin: u.lastLogin || u.lastLoginAt || null,
+	profileImage: u.profileImage || null,
+});
 
 const SubAdminSettingsPage = () => {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [editingAdmin, setEditingAdmin] = useState(null);
-	const [subAdmins, setSubAdmins] = useState([
-		{
-			id: 1,
-			name: 'Elizabeth Horst',
-			role: 'Finance admin',
-			email: 'elkhorst3@gmail.com',
-			lastLogin: '2025-10-31T10:20:59',
-			profileImage: null,
-		},
-		{
-			id: 2,
-			name: 'Emmanuel Johnson',
-			role: 'Auditor',
-			email: 'ejohnson@example.com',
-			lastLogin: '2025-10-31T10:20:59',
-			profileImage: null,
-		},
-	]);
+	const [editingAdminId, setEditingAdminId] = useState(null);
+	const [subAdmins, setSubAdmins] = useState([]);
+
+	useEffect(() => {
+		getList('/api/user/get-all', 'users')
+			.then((list) => {
+				setSubAdmins(list.map(mapAdmin));
+			})
+			.catch(() => {});
+	}, []);
 
 	const handleOpenModal = (admin = null) => {
 		setEditingAdmin(admin);
@@ -37,68 +40,90 @@ const SubAdminSettingsPage = () => {
 	const handleCloseModal = () => {
 		setIsModalOpen(false);
 		setEditingAdmin(null);
+		setEditingAdminId(null);
 	};
 
 	const handleSubmit = async (formData) => {
 		try {
-			if (editingAdmin) {
-				// Update existing admin
+			if (editingAdminId) {
+				await api.put(`/api/user/edit/${editingAdminId}`, {
+					firstName: formData.firstName,
+					lastName: formData.lastName,
+					email: formData.email,
+					userRole: formData.adminRole,
+				});
 				setSubAdmins((prev) =>
 					prev.map((admin) =>
-						admin.id === editingAdmin.id
+						admin.id === editingAdminId
 							? {
 									...admin,
-									...formData,
 									name: `${formData.firstName} ${formData.lastName}`,
 									role: formData.adminRole,
-							  }
-							: admin
-					)
+									email: formData.email,
+								}
+							: admin,
+					),
 				);
-				message.success('Sub-admin updated successfully!');
+				toast.success('Sub-admin updated successfully!');
 			} else {
-				// Create new admin
-				const newAdmin = {
-					id: Date.now(),
-					name: `${formData.firstName} ${formData.lastName}`,
-					role: formData.adminRole,
+				const data = await api.post('/api/user/register', {
+					firstName: formData.firstName,
+					lastName: formData.lastName,
 					email: formData.email,
-					lastLogin: null,
-					profileImage: null,
-				};
-				setSubAdmins((prev) => [...prev, newAdmin]);
-				message.success('Sub-admin created successfully!');
+					password: formData.password,
+					userRole: formData.adminRole,
+				});
+				const newId = data.id || data.data?.id || Date.now();
+				setSubAdmins((prev) => [
+					...prev,
+					{
+						id: newId,
+						name: `${formData.firstName} ${formData.lastName}`,
+						role: formData.adminRole,
+						email: formData.email,
+						lastLogin: null,
+						profileImage: null,
+					},
+				]);
+				toast.success('Sub-admin created successfully!');
 			}
-
-			// Here you would make your API call
-			// await createSubAdmin(formData);
-		} catch (error) {
-			message.error('Failed to save sub-admin. Please try again.');
+		} catch (err) {
+			toast.error(err.message || 'Failed to save sub-admin. Please try again.');
 		}
 	};
 
 	const handleEdit = (admin) => {
+		setEditingAdminId(admin.id);
 		const formData = {
 			firstName: admin.name.split(' ')[0],
 			lastName: admin.name.split(' ').slice(1).join(' '),
 			email: admin.email,
-			adminRole: admin.role.toLowerCase().replace(' ', '_'),
+			adminRole: admin.role,
 		};
 		handleOpenModal(formData);
 	};
 
-	const handleDelete = async (adminId) => {
-		try {
-			// Confirm deletion
-			if (window.confirm('Are you sure you want to delete this sub-admin?')) {
-				setSubAdmins((prev) => prev.filter((admin) => admin.id !== adminId));
-				message.success('Sub-admin deleted successfully!');
+	const [adminToDelete, setAdminToDelete] = useState(null);
+	const [deleting, setDeleting] = useState(false);
 
-				// Here you would make your API call
-				// await deleteSubAdmin(adminId);
-			}
-		} catch (error) {
-			message.error('Failed to delete sub-admin. Please try again.');
+	// SubAdminCard passes the admin id
+	const handleDelete = (adminId) =>
+		setAdminToDelete(subAdmins.find((a) => a.id === adminId) || { id: adminId });
+
+	const confirmDelete = async () => {
+		if (!adminToDelete) return;
+		setDeleting(true);
+		try {
+			await api.delete(`/api/user/delete/${adminToDelete.id}`);
+			setSubAdmins((prev) =>
+				prev.filter((admin) => admin.id !== adminToDelete.id),
+			);
+			toast.success('Sub-admin deleted successfully!');
+		} catch (err) {
+			toast.error(err.message || 'Failed to delete sub-admin. Please try again.');
+		} finally {
+			setDeleting(false);
+			setAdminToDelete(null);
 		}
 	};
 
@@ -140,6 +165,19 @@ const SubAdminSettingsPage = () => {
 				onClose={handleCloseModal}
 				onSubmit={handleSubmit}
 				initialData={editingAdmin}
+			/>
+
+			<ConfirmModal
+				open={!!adminToDelete}
+				title='Delete sub-admin?'
+				message={
+					adminToDelete &&
+					`${adminToDelete.name && adminToDelete.name !== '-' ? adminToDelete.name : adminToDelete.email || 'This sub-admin'} will lose access to the dashboard. This cannot be undone.`
+				}
+				confirmText='Delete'
+				loading={deleting}
+				onConfirm={confirmDelete}
+				onCancel={() => setAdminToDelete(null)}
 			/>
 		</div>
 	);

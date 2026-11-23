@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import { Modal } from './GenericModal';
 import { Input } from '../forms/input';
 
@@ -35,7 +36,7 @@ export const SecurityQuestionsModal = ({ isOpen, onClose }) => {
 		if (step === 1 && question1 && answer1 && question2 && answer2) {
 			setStep(2);
 		} else if (step === 2) {
-			alert('Security questions set successfully!');
+			toast.success('Security questions set successfully!');
 			onClose();
 			setStep(1);
 		}

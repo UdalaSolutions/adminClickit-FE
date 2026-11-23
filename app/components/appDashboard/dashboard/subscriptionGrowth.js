@@ -121,7 +121,7 @@ const SubscriptionGrowth = () => {
 	);
 
 	return (
-		<div className='bg-white p-4 rounded-xl flex-1 max-w-[680px]'>
+		<div className='bg-white p-4 rounded-xl flex-1 min-w-0'>
 			<div className='flex justify-between items-center mb-6'>
 				<h2 className='font-bold'>Subscription growth</h2>
 
@@ -150,14 +150,6 @@ const SubscriptionGrowth = () => {
 				</div>
 			</div>
 
-			{/* Toggle for demo - remove in production */}
-			<div className='mb-4 flex justify-end'>
-				<button
-					className='text-xs text-blue-600 underline cursor-pointer'
-					onClick={() => setHasData(!hasData)}>
-					{hasData ? 'Show Empty State' : 'Show Data'}
-				</button>
-			</div>
 
 			{!hasData ? (
 				<h1>Hello empty</h1>

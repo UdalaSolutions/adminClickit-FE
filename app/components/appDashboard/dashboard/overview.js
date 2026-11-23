@@ -71,7 +71,7 @@ const Overview = () => {
 				</div>
 			</div>
 
-			<div className='grid lg:grid-cols-4 gap-4'>
+			<div className='grid sm:grid-cols-2 xl:grid-cols-4 gap-4'>
 				{overviews.map((overview, index) => (
 					<div
 						key={index}

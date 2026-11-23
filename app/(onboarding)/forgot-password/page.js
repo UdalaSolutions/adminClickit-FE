@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { sendOtp } from '../../utils/api';
 
 const ForgotPassword = () => {
 	const [email, setEmail] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
 
 	const handleBack = () => {
 		window.location.href = '/signup';
@@ -13,21 +15,24 @@ const ForgotPassword = () => {
 
 	const handleSubmit = async () => {
 		if (!email.trim()) return;
-
 		setIsLoading(true);
-
-		// Simulate sending reset email
-		setTimeout(() => {
-			setIsLoading(false);
+		setError('');
+		try {
+			await sendOtp(email.trim());
+			sessionStorage.setItem('pendingEmail', email.trim());
 			window.location.href = '/verify-email';
-		}, 1000);
+		} catch (err) {
+			setError(err.message || 'Failed to send reset email. Please try again.');
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	const isFormValid = email.trim() !== '';
 
 	return (
 		<div className='flex items-center justify-center p-4'>
-			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-8 w-[500px]'>
+			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-6 sm:p-8 w-full max-w-[500px]'>
 				<button
 					onClick={handleBack}
 					className='bg-[#FAFAFA] rounded-xl flex items-center gap-2 text-foreground mb-6 h-12.5 w-12.5 justify-center cursor-pointer'>
@@ -54,6 +59,13 @@ const ForgotPassword = () => {
 							className='w-full px-4 py-3 border border-foreground rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all'
 						/>
 					</div>
+
+					{error && (
+						<div className='flex items-center gap-2 text-[#F20D0D]'>
+							<AlertCircle size={16} />
+							<span className='text-sm'>{error}</span>
+						</div>
+					)}
 
 					<button
 						onClick={handleSubmit}

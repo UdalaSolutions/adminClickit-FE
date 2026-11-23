@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import { PasswordRequirements } from '../appDashboard/settings/passwordRequirement';
 import { Input } from '../forms/input';
 import { Modal } from './GenericModal';
@@ -15,7 +16,7 @@ export const ResetPasswordModal = ({ isOpen, onClose }) => {
 
 	const handleSubmit = () => {
 		if (newPassword === confirmPassword && newPassword.length >= 8) {
-			alert('Password reset successful!');
+			toast.success('Password reset successful!');
 			onClose();
 		}
 	};

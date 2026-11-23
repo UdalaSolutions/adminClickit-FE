@@ -22,7 +22,7 @@ const TotalEntries = () => {
 	const totalDraws = chartData.reduce((acc, item) => acc + item.value, 0);
 
 	return (
-		<div className='bg-white p-4 rounded-xl min-w-[350px]'>
+		<div className='bg-white p-4 rounded-xl w-full xl:w-[350px] xl:shrink-0'>
 			<h2 className='font-bold mb-3'>Total draws conducted</h2>
 
 			<div className='flex flex-col items-center'>

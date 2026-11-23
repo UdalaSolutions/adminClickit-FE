@@ -94,19 +94,11 @@ const EntryByChannel = () => {
 	};
 
 	return (
-		<div className='bg-white p-4 rounded-xl min-w-[523px]'>
+		<div className='bg-white p-4 rounded-xl w-full xl:w-[400px] xl:shrink-0 min-w-0'>
 			<div className='flex justify-between items-center mb-6'>
 				<h2 className=' font-bold '>Entries by channels</h2>
 			</div>
 
-			{/* Toggle for demo - remove in production */}
-			<div className='mb-4 flex justify-end'>
-				<button
-					className='text-xs text-blue-600 underline cursor-pointer'
-					onClick={() => setHasData(!hasData)}>
-					{hasData ? 'Show Empty State' : 'Show Data'}
-				</button>
-			</div>
 
 			{!hasData ? (
 				<h1>Hello world</h1>

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, EyeOff, Check } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { sendOtp } from '../../utils/api';
 
 const Signup = () => {
 	const router = useRouter();
@@ -16,6 +17,8 @@ const Signup = () => {
 
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
 
 	// Password validation checks
 	const hasMinLength = formData.password.length >= 8;
@@ -41,17 +44,40 @@ const Signup = () => {
 			...formData,
 			[e.target.name]: e.target.value,
 		});
+		if (error) setError('');
 	};
 
-	const handleSubmit = () => {
-		if (isFormValid) {
+	const handleSubmit = async () => {
+		if (!isFormValid) return;
+		setIsLoading(true);
+		setError('');
+		try {
+			const email = formData.email.trim();
+			// Step 1: send the email string to the backend to get an OTP.
+			// The account is only registered after the code is verified.
+			await sendOtp(email);
+			sessionStorage.setItem('pendingEmail', email);
+			sessionStorage.setItem(
+				'pendingSignup',
+				JSON.stringify({
+					firstName: formData.firstName.trim(),
+					lastName: formData.lastName.trim(),
+					email,
+					password: formData.password,
+					userRole: 'ADMIN',
+				}),
+			);
 			router.push('/email-verification');
+		} catch (err) {
+			setError(err.message || 'Failed to send verification code. Please try again.');
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
 	return (
 		<div className='min-h-screen  flex items-center justify-center p-6'>
-			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-8 w-[500px]'>
+			<div className='bg-white rounded-lg shadow-[0px_0px_4px_0px_#9CC6D31A] p-6 sm:p-8 w-full max-w-[500px]'>
 				<h2 className='text-4xl leading-12 font-bold  text-center mb-2'>
 					Create account
 				</h2>
@@ -60,7 +86,7 @@ const Signup = () => {
 				</p>
 
 				<div className='space-y-4'>
-					<div className='grid grid-cols-2 gap-4'>
+					<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 						<div>
 							<label className='block font-medium text-[#999999] mb-1'>
 								First name
@@ -147,7 +173,7 @@ const Signup = () => {
 						</div>
 					</div>
 
-					<div className='grid grid-cols-2 gap-x-8 gap-y-2 text-sm pt-2'>
+					<div className='grid grid-cols-1 min-[400px]:grid-cols-2 gap-x-8 gap-y-2 text-sm pt-2'>
 						<div className='flex items-center gap-2'>
 							<div
 								className={`w-5 h-5 rounded-full flex items-center justify-center ${
@@ -211,16 +237,32 @@ const Signup = () => {
 						</div>
 					</div>
 
+					{error && (
+						<div className='flex items-center gap-2 text-[#F20D0D]'>
+							<AlertCircle size={16} />
+							<span className='text-sm'>{error}</span>
+						</div>
+					)}
+
 					<button
 						onClick={handleSubmit}
-						disabled={!isFormValid}
+						disabled={!isFormValid || isLoading}
 						className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors mt-8 cursor-pointer ${
-							isFormValid
+							isFormValid && !isLoading
 								? 'bg-[#FAAA32]'
 								: 'bg-[#FAAA32]/50 text-foreground/50 cursor-not-allowed'
 						}`}>
-						Create account
+						{isLoading ? 'Sending code...' : 'Create account'}
 					</button>
+
+					<p className='text-center text-[#999999] mt-4'>
+						Already have an account?{' '}
+						<a
+							href='/signin'
+							className='text-[#FAAA32] font-semibold hover:underline'>
+							Sign in
+						</a>
+					</p>
 				</div>
 			</div>
 		</div>

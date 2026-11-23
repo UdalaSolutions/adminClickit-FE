@@ -35,10 +35,9 @@ const CreateSubAdminModal = ({
 
 	const adminRoles = [
 		{ value: '', label: 'Select admin role' },
-		{ value: 'auditor', label: 'Auditor' },
-		{ value: 'finance_admin', label: 'Finance Admin' },
-		{ value: 'content_manager', label: 'Content Manager' },
-		{ value: 'support_admin', label: 'Support Admin' },
+		{ value: 'ADMIN', label: 'Admin' },
+		{ value: 'MANAGER', label: 'Manager' },
+		{ value: 'SUPER_ADMIN', label: 'Super Admin' },
 	];
 
 	// Password validation rules
@@ -173,7 +172,7 @@ const CreateSubAdminModal = ({
 				<div className='p-6'>
 					<div className='flex flex-col gap-4'>
 						{/* Name Fields */}
-						<div className='grid grid-cols-2 gap-4'>
+						<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 							<div className='flex flex-col gap-2'>
 								<label
 									htmlFor='firstName'
@@ -325,7 +324,7 @@ const CreateSubAdminModal = ({
 						</div>
 
 						{/* Password Requirements */}
-						<div className='grid grid-cols-2 gap-2 mt-2'>
+						<div className='grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 mt-2'>
 							{passwordRules.map((rule) => {
 								const isValid = rule.test(formData.password);
 								return (

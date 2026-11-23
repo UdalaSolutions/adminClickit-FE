@@ -1,154 +1,175 @@
 'use client';
 
-import { useState } from 'react';
-import {
-	MoreVertical,
-	ChevronLeft,
-	ChevronRight,
-	CloudUpload,
-	Calendar,
-	Plus,
-} from 'lucide-react';
-import { Modal, Input, Select, DatePicker, Button, Tag, message } from 'antd';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { MoreVertical, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Modal, Select, DatePicker, Button, Dropdown } from 'antd';
+import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
+import { api, getList } from '../../utils/api';
+import TableSkeleton from '../../components/common/TableSkeleton';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
-const { Option } = Select;
 
-const initialDraws = [
-	{
-		id: '#001001',
-		drawType: 'Weekly draw',
-		scheduleTime: '01/11/25, 11:00 AM',
-		executedTime: '01/11/25, 11:30 AM',
-		status: 'Ongoing',
-	},
-	{
-		id: '#001002',
-		drawType: 'Weekly draw',
-		scheduleTime: '01/11/25, 11:00 AM',
-		executedTime: '01/11/25, 11:30 AM',
-		status: 'Completed',
-	},
-	{
-		id: '#001002',
-		drawType: 'Weekly draw',
-		scheduleTime: '01/11/25, 11:00 AM',
-		executedTime: '01/11/25, 11:30 AM',
-		status: 'Pending',
-	},
-];
+const formatDate = (val) => {
+	if (!val || val === '-') return '-';
+	const d = new Date(val);
+	return isNaN(d.getTime())
+		? String(val)
+		: d
+				.toLocaleString('en-US', {
+					month: '2-digit',
+					day: '2-digit',
+					year: '2-digit',
+					hour: '2-digit',
+					minute: '2-digit',
+				})
+				.replace(',', '');
+};
+
+const mapDraw = (d) => ({
+	id: d.id || '-',
+	drawType: titleCase(d.drawType),
+	scheduleTime: formatDate(d.scheduledDateAndTime),
+	executedTime: formatDate(d.executedDateAndTime),
+	status: titleCase(d.status),
+	entries: (d.participants || d.usersParticipatedIds || []).length,
+});
+
+const titleCase = (v) =>
+	v ? v.charAt(0) + v.slice(1).toLowerCase() : '-';
+
+// Backend expects a Java LocalDateTime: "YYYY-MM-DDTHH:mm:ss" (no timezone)
+const toLocalDateTime = (d) => d.second(0).format('YYYY-MM-DDTHH:mm:ss');
+
+// Draws are created automatically by the backend. Manual creation
+// (POST /api/user/draw/create) is untested on the backend, so it is off.
+// Set to true to re-enable the Create draw button and form.
+const MANUAL_DRAW_CREATION = false;
+
+const emptyForm = { drawType: undefined, scheduledDateAndTime: null };
 
 const DrawManagement = () => {
-	const [draws, setDraws] = useState(initialDraws);
+	const router = useRouter();
+	const [draws, setDraws] = useState([]);
+	const [loading, setLoading] = useState(true);
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-	const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-	const [newDraw, setNewDraw] = useState({
-		name: '',
-		type: '',
-		platform: 'Youtube',
-		file: null,
-		scheduleDate: null,
-		scheduleTime: null,
+	const [form, setForm] = useState(emptyForm);
+	const [submitting, setSubmitting] = useState(null); // 'schedule' | 'run' | null
+
+	const loadDraws = () =>
+		getList('/api/user/draw/get-all', 'draws')
+			.then((list) => setDraws(list.map(mapDraw)))
+			.catch((err) => toast.error(err.message || 'Failed to load draws'))
+			.finally(() => setLoading(false));
+
+	useEffect(() => {
+		loadDraws();
+	}, []);
+
+	const closeModal = () => {
+		setIsCreateModalOpen(false);
+		setForm(emptyForm);
+	};
+
+	// POST /api/user/draw/create  { drawType, scheduledDateAndTime, status }
+	const createDraw = (scheduledDateAndTime) =>
+		api.post('/api/user/draw/create', {
+			drawType: form.drawType,
+			scheduledDateAndTime: toLocalDateTime(scheduledDateAndTime),
+			status: 'PENDING',
+		});
+
+	const handleSchedule = async () => {
+		if (!form.drawType) return toast.error('Select a draw type');
+		if (!form.scheduledDateAndTime)
+			return toast.error('Select the date and time for the draw');
+		if (form.scheduledDateAndTime.isBefore(dayjs()))
+			return toast.error('Scheduled time must be in the future');
+		setSubmitting('schedule');
+		try {
+			await createDraw(form.scheduledDateAndTime);
+			toast.success('Draw scheduled');
+			closeModal();
+			loadDraws();
+		} catch (err) {
+			toast.error(err.message || 'Failed to schedule draw');
+		} finally {
+			setSubmitting(null);
+		}
+	};
+
+	const [drawToDelete, setDrawToDelete] = useState(null);
+	const [deleting, setDeleting] = useState(false);
+
+	const confirmDeleteDraw = async () => {
+		if (!drawToDelete) return;
+		setDeleting(true);
+		try {
+			await api.delete(`/api/user/draw/delete/${drawToDelete.id}`);
+			toast.success('Draw deleted');
+		} catch (err) {
+			toast.error(err.message || 'Failed to delete draw');
+		} finally {
+			setDeleting(false);
+			setDrawToDelete(null);
+			loadDraws();
+		}
+	};
+
+	const rowMenu = (draw) => ({
+		items: [
+			...(draw.status !== 'Completed'
+				? [
+						{
+							key: 'run',
+							label: <span className='text-sm'>Run draw</span>,
+						},
+					]
+				: []),
+			{
+				key: 'delete',
+				label: <span className='text-sm'>Delete draw</span>,
+			},
+		],
+		onClick: ({ key }) => {
+			if (key === 'delete') return setDrawToDelete(draw);
+			// A draw can only be executed once subscribers have entered it
+			if (!draw.entries) {
+				return toast.error(
+					'This draw has no participants yet, so it cannot be run.',
+				);
+			}
+			router.push(`/spin?drawId=${draw.id}`);
+		},
 	});
 
-	const handleCreateDraw = () => {
-		setIsCreateModalOpen(true);
-	};
-
-	const handleScheduleClick = () => {
-		if (!newDraw.name || !newDraw.type) {
-			message.error('Please fill in draw name and type');
-			return;
-		}
-		setIsCreateModalOpen(false);
-		setIsScheduleModalOpen(true);
-	};
-
-	const handleRunDraw = () => {
-		if (!newDraw.name || !newDraw.type) {
-			message.error('Please fill in draw name and type');
-			return;
-		}
-
-		const now = new Date();
-		const newDrawEntry = {
-			id: `#00${draws.length + 1001}`,
-			drawType: newDraw.type,
-			scheduleTime: now
-				.toLocaleString('en-US', {
-					month: '2-digit',
-					day: '2-digit',
-					year: '2-digit',
-					hour: '2-digit',
-					minute: '2-digit',
-				})
-				.replace(',', ''),
-			executedTime: now
-				.toLocaleString('en-US', {
-					month: '2-digit',
-					day: '2-digit',
-					year: '2-digit',
-					hour: '2-digit',
-					minute: '2-digit',
-				})
-				.replace(',', ''),
-			status: 'Ongoing',
-		};
-
-		setDraws([newDrawEntry, ...draws]);
-		message.success('Draw created and running!');
-		resetModal();
-	};
-
-	const handleSaveSchedule = () => {
-		if (!newDraw.scheduleDate || !newDraw.scheduleTime) {
-			message.error('Please select date and time');
-			return;
-		}
-
-		const scheduleDateTime = `${newDraw.scheduleDate.format('MM/DD/YY')}, ${
-			newDraw.scheduleTime
-		}`;
-		const newDrawEntry = {
-			id: `#00${draws.length + 1001}`,
-			drawType: newDraw.type,
-			scheduleTime: scheduleDateTime,
-			executedTime: '-',
-			status: 'Pending',
-		};
-
-		setDraws([newDrawEntry, ...draws]);
-		message.success('Draw scheduled successfully!');
-		resetModal();
-	};
-
-	const resetModal = () => {
-		setIsCreateModalOpen(false);
-		setIsScheduleModalOpen(false);
-		setNewDraw({
-			name: '',
-			type: '',
-			platform: 'Youtube',
-			file: null,
-			scheduleDate: null,
-			scheduleTime: null,
-		});
-	};
+	// The spin page sends us back here with a message if the draw can't run
+	useEffect(() => {
+		try {
+			const msg = sessionStorage.getItem('drawError');
+			if (msg) {
+				sessionStorage.removeItem('drawError');
+				toast.error(msg);
+			}
+		} catch {}
+	}, []);
 
 	return (
 		<div className=''>
 			{/* Header */}
 			<div className='flex justify-end items-center mb-6'>
 				<button
-					onClick={handleCreateDraw}
-					className='bg-[#FAAA32]  px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors cursor-pointer'>
+					onClick={() => MANUAL_DRAW_CREATION && setIsCreateModalOpen(true)}
+					disabled={!MANUAL_DRAW_CREATION}
+					className='bg-[#FAAA32] px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>
 					<Plus /> Create draw
 				</button>
 			</div>
 
 			{/* Table */}
-			<div className='bg-white rounded-lg overflow-hidden shadow-sm'>
-				<table className='w-full'>
+			<div className='bg-white rounded-lg overflow-x-auto shadow-sm'>
+				<table className='w-full min-w-[760px]'>
 					<thead>
 						<tr className='bg-[#FFFBF5] border-b border-gray-200'>
 							<th className='text-left px-6 py-4 font-semibold '>Draw ID</th>
@@ -159,34 +180,55 @@ const DrawManagement = () => {
 							<th className='text-left px-6 py-4 font-semibold '>
 								Executed time
 							</th>
-							<th className='text-left px-6 py-4 font-semibold '>Status</th>
+							<th className='text-left px-6 py-4 font-semibold '>Entries</th>
+						<th className='text-left px-6 py-4 font-semibold '>Status</th>
 							<th className='px-6 py-4'></th>
 						</tr>
 					</thead>
 					<tbody>
-						{draws.map((draw, index) => (
-							<tr
-								key={index}
-								className='border-b border-gray-100 hover:bg-gray-50 transition-colors'>
-								<td className='px-6 py-4 text-foreground'>{draw.id}</td>
-								<td className='px-6 py-4 '>{draw.drawType}</td>
-								<td className='px-6 py-4 text-foreground'>
-									{draw.scheduleTime}
-								</td>
-								<td className='px-6 py-4 text-foreground'>
-									{draw.executedTime}
-								</td>
-								<td className='px-6 py-4 text-foreground'>{draw.status}</td>
-								<td className='px-6 py-4'>
-									<button className='p-1 hover:bg-gray-100 rounded transition-colors'>
-										<MoreVertical
-											size={20}
-											className='text-foreground'
-										/>
-									</button>
+						{loading ? (
+							<TableSkeleton rows={5} cols={7} />
+						) : draws.length === 0 ? (
+							<tr>
+								<td
+									colSpan={7}
+									className='px-6 py-8 text-center text-gray-400'>
+									No draws found
 								</td>
 							</tr>
-						))}
+						) : (
+							draws.map((draw) => (
+								<tr
+									key={draw.id}
+									className='border-b border-gray-100 hover:bg-gray-50 transition-colors'>
+									<td className='px-6 py-4 text-foreground'>{draw.id}</td>
+									<td className='px-6 py-4 '>{draw.drawType}</td>
+									<td className='px-6 py-4 text-foreground'>
+										{draw.scheduleTime}
+									</td>
+									<td className='px-6 py-4 text-foreground'>
+										{draw.executedTime}
+									</td>
+									<td className='px-6 py-4 text-foreground'>{draw.entries}</td>
+									<td className='px-6 py-4 text-foreground'>{draw.status}</td>
+									<td className='px-6 py-4'>
+										<Dropdown
+											menu={rowMenu(draw)}
+											trigger={['click']}
+											placement='bottomRight'>
+											<button
+												className='p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer'
+												aria-label='Draw actions'>
+												<MoreVertical
+													size={20}
+													className='text-foreground'
+												/>
+											</button>
+										</Dropdown>
+									</td>
+								</tr>
+							))
+						)}
 					</tbody>
 				</table>
 			</div>
@@ -210,144 +252,73 @@ const DrawManagement = () => {
 				</button>
 			</div>
 
-			{/* Create Draw Modal */}
+			<ConfirmModal
+				open={!!drawToDelete}
+				title='Delete draw?'
+				message={
+					drawToDelete &&
+					`This ${drawToDelete.drawType.toLowerCase()} draw scheduled for ${drawToDelete.scheduleTime} will be permanently deleted.`
+				}
+				confirmText='Delete draw'
+				loading={deleting}
+				onConfirm={confirmDeleteDraw}
+				onCancel={() => setDrawToDelete(null)}
+			/>
+
+			{/* Create Draw Modal — fields match backend CreateDrawRequest */}
 			<Modal
 				title='Create draw'
 				open={isCreateModalOpen}
-				onCancel={resetModal}
+				onCancel={closeModal}
 				footer={null}
-				width={530}>
-				<div className='space-y-4 mt-6'>
+				width={500}>
+				<div className='space-y-5 mt-6'>
 					<div>
-						<label className='block  font-medium  mb-2 text-[#999999]'>
-							Draw name
-						</label>
-						<Input
-							placeholder='Enter draw name here'
-							value={newDraw.name}
-							onChange={(e) => setNewDraw({ ...newDraw, name: e.target.value })}
-							size='large'
-							className='focus:outline-none! focus:ring-0! text-[#999999]! outline-0!'
-						/>
-					</div>
-
-					<div>
-						<label className='block  font-medium  mb-2 text-[#999999]'>
+						<label className='block font-medium mb-2 text-[#999999]'>
 							Draw type
 						</label>
 						<Select
 							placeholder='Select draw type'
-							value={newDraw.type || undefined}
-							onChange={(value) => setNewDraw({ ...newDraw, type: value })}
-							size='large'
-							className='w-full'>
-							<Option value='Weekly draw'>Weekly draw</Option>
-							<Option value='Monthly draw'>Monthly draw</Option>
-							<Option value='Daily draw'>Daily draw</Option>
-						</Select>
-					</div>
-
-					<div>
-						<label className='block  font-medium  mb-2 text-[#999999]'>
-							Streaming platform
-						</label>
-						<Input
-							value={newDraw.platform}
-							onChange={(e) =>
-								setNewDraw({ ...newDraw, platform: e.target.value })
-							}
-							size='large'
-						/>
-					</div>
-
-					<div>
-						<div className='border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-[#FF9900] transition-colors cursor-pointer'>
-							<CloudUpload
-								className='mx-auto text-foreground mb-2'
-								size={32}
-							/>
-
-							<p className='text-foreground'>
-								<span className='text-[#FF9900] font-medium'>
-									Click to upload
-								</span>{' '}
-								Or drag and drop your files here
-							</p>
-							<p className='text-sm text-foreground mt-1'>
-								CSV or Excel files(xlsx, 25MB)
-							</p>
-						</div>
-					</div>
-
-					<div className='flex gap-3 mt-6'>
-						<Button
-							onClick={handleScheduleClick}
-							size='large'
-							className='flex-1 border border-[#ff9900]! text-[#ff9900]! bg-white'>
-							Schedule
-						</Button>
-						<Button
-							type='primary'
-							onClick={handleRunDraw}
-							size='large'
-							className='flex-1 bg-[#FF9900]! text-foreground! border-0'>
-							Run draw
-						</Button>
-					</div>
-				</div>
-			</Modal>
-
-			{/* Schedule Draw Modal */}
-			<Modal
-				title='Schedule draw'
-				open={isScheduleModalOpen}
-				onCancel={() => setIsScheduleModalOpen(false)}
-				footer={null}
-				width={500}>
-				<div className='space-y-4 mt-6'>
-					<div>
-						<DatePicker
-							value={newDraw.scheduleDate}
-							onChange={(date) =>
-								setNewDraw({ ...newDraw, scheduleDate: date })
-							}
+							value={form.drawType}
+							onChange={(drawType) => setForm({ ...form, drawType })}
 							size='large'
 							className='w-full'
-							format='MMMM YYYY'
-							picker='month'
+							options={[
+								{ value: 'DAILY', label: 'Daily draw' },
+								{ value: 'WEEKLY', label: 'Weekly draw' },
+								{ value: 'MONTHLY', label: 'Monthly draw' },
+							]}
 						/>
 					</div>
 
 					<div>
-						<label className='block text-sm font-medium  mb-2'>
-							Select time
+						<label className='block font-medium mb-2 text-[#999999]'>
+							Scheduled date &amp; time
 						</label>
-						<Select
-							placeholder='Select draw time'
-							value={newDraw.scheduleTime || undefined}
-							onChange={(value) =>
-								setNewDraw({ ...newDraw, scheduleTime: value })
-							}
+						<DatePicker
+							showTime={{ format: 'hh:mm A', use12Hours: true, minuteStep: 5 }}
+							format='DD MMM YYYY, hh:mm A'
+							placeholder='Select date and time'
+							value={form.scheduledDateAndTime}
+							onChange={(d) => setForm({ ...form, scheduledDateAndTime: d })}
+							disabledDate={(d) => d && d.isBefore(dayjs(), 'day')}
 							size='large'
-							className='w-full'>
-							<Option value='09:00 AM'>09:00 AM</Option>
-							<Option value='10:00 AM'>10:00 AM</Option>
-							<Option value='11:00 AM'>11:00 AM</Option>
-							<Option value='12:00 PM'>12:00 PM</Option>
-							<Option value='01:00 PM'>01:00 PM</Option>
-							<Option value='02:00 PM'>02:00 PM</Option>
-							<Option value='03:00 PM'>03:00 PM</Option>
-							<Option value='04:00 PM'>04:00 PM</Option>
-							<Option value='05:00 PM'>05:00 PM</Option>
-						</Select>
+							className='w-full'
+						/>
+						<p className='text-sm text-[#999999] mt-1'>
+							Subscribers are entered into the draw until it runs. Run it from the
+							table once it has entries.
+						</p>
 					</div>
 
 					<Button
 						type='primary'
-						onClick={handleSaveSchedule}
+						onClick={handleSchedule}
+						loading={submitting === 'schedule'}
+						disabled={!!submitting}
 						size='large'
-						className='w-full bg-[#FF9900] hover:bg-[#e68a00] border-0 mt-4'>
-						Save
+						className='w-full bg-[#FAAA32]! text-foreground! border-0 font-semibold'>
+						Create draw
 					</Button>
 				</div>
 			</Modal>

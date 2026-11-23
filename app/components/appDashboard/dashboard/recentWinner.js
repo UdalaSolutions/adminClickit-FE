@@ -65,7 +65,7 @@ const RecentWinners = () => {
 	);
 
 	return (
-		<div className='bg-white rounded-xl overflow-hidden w-[800px]'>
+		<div className='bg-white rounded-xl overflow-x-auto flex-1 min-w-0'>
 			<div className='p-4 flex justify-between items-center'>
 				<h2 className='font-bold'>Recent winners</h2>
 				{winners.length > 0 && (
@@ -79,7 +79,7 @@ const RecentWinners = () => {
 				<h1>Hello </h1>
 			) : (
 				<div className='overflow-x-auto'>
-					<table className='w-full'>
+					<table className='w-full min-w-[760px]'>
 						<thead>
 							<tr className='bg-[#fefbf5]'>
 								<th className='text-left py-4 px-6 text-sm font-semibold text-gray-700'>

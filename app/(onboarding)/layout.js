@@ -2,13 +2,13 @@ import Image from 'next/image';
 
 export default function Layout({ children }) {
 	return (
-		<div className='relative'>
+		<div className='relative overflow-hidden'>
 			<Image
 				src='/onboarding/onboarding_background1.svg'
 				alt='background'
 				width={400}
 				height={444}
-				className='absolute right-0 z-10'
+				className='absolute right-0 z-10 hidden md:block'
 			/>
 			<div className='min-h-screen flex items-center justify-center relative z-20'>
 				{children}
@@ -18,7 +18,7 @@ export default function Layout({ children }) {
 				alt='background'
 				width={400}
 				height={444}
-				className='absolute bottom-0 z-10'
+				className='absolute bottom-0 z-10 hidden md:block'
 			/>
 		</div>
 	);

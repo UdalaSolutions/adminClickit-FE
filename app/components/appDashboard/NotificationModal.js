@@ -14,7 +14,7 @@ const NotificationModal = ({ isOpen, onClose, notifications }) => {
 
 			{/* Modal */}
 			<div
-				className='absolute top-[70px] right-0 w-[500px] bg-white rounded-xl shadow-[0px_0px_22px_10px_#9CC6D34D]
+				className='absolute top-[70px] -right-24 sm:right-0 w-[calc(100vw-2rem)] sm:w-[500px] bg-white rounded-xl shadow-[0px_0px_22px_10px_#9CC6D34D]
  z-50 overflow-hidden'>
 				{/* Header */}
 				<div className='flex items-center justify-between px-6 py-5 border-b border-gray-100'>

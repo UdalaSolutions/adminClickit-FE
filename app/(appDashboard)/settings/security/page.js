@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import { SecurityItem } from '../../../components/appDashboard/settings/securityItem';
 import { ResetPasswordModal } from '../../../components/modal/resetPasswordModal';
 import { SecurityQuestionsModal } from '../../../components/modal/SecurityQuestionsModal';
@@ -50,11 +51,11 @@ const SecuritySettingsPage = () => {
 				/>
 				<SecurityItem
 					label='Data backup'
-					onClick={() => alert('Data backup clicked')}
+					onClick={() => toast.info('Data backup is coming soon')}
 				/>
 				<SecurityItem
 					label='Device management'
-					onClick={() => alert('Device management clicked')}
+					onClick={() => toast.info('Device management is coming soon')}
 				/>
 			</div>
 
