@@ -32,6 +32,8 @@ const formatDate = (val) => {
 
 const mapDraw = (d) => ({
 	id: d.id || '-',
+	// Human-friendly reference once the backend fills it in; else the UUID
+	ref: d.referenceNumber || d.id || '-',
 	drawType: titleCase(d.drawType),
 	scheduleTime: formatDate(d.scheduledDateAndTime),
 	executedTime: formatDate(d.executedDateAndTime),
@@ -221,7 +223,7 @@ const DrawManagement = () => {
 									key={draw.id}
 									onClick={() => setDetailsDraw(draw)}
 									className='border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer'>
-									<td className='px-6 py-4 text-foreground'>{draw.id}</td>
+									<td className='px-6 py-4 text-foreground'>{draw.ref}</td>
 									<td className='px-6 py-4 '>{draw.drawType}</td>
 									<td className='px-6 py-4 text-foreground'>
 										{draw.scheduleTime}

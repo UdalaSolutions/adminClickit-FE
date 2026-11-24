@@ -106,6 +106,11 @@ export default function DrawDetailsModal({ draw, open, onClose, onRun }) {
 					</h3>
 					<StatusPill status={draw.status} />
 				</div>
+				{draw.referenceNumber && (
+					<p className='mt-1 text-sm font-medium text-[#1A1A1A]'>
+						Ref: {draw.referenceNumber}
+					</p>
+				)}
 				<button
 					type='button'
 					onClick={copyId}
